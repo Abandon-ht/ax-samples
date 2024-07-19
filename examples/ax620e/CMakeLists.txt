@@ -44,3 +44,8 @@ axera_example(ax_depth_anything ax_depth_anything_steps.cc)
 
 axera_example(ax_imgproc ax_imgproc_steps.cc)
 axera_example(ax_model_info ax_model_info.cc)
+axera_example(ax_audio_input ax_audio_input.cc)
+axera_example(ax_audio_input_asr ax_audio_input_asr.cc)
+axera_example(sample_audio_input sample_audio_link.c)
+axera_example(decode-file-c-api decode-file-c-api.c)
+axera_example(ax_audio_asr ax_audio_asr.cc)

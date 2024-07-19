@@ -14,7 +14,7 @@
 #
 # Author: ls.wang
 #
-
+set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 function(axera_example example_name)
     add_executable(${example_name})
 
@@ -34,6 +34,26 @@ function(axera_example example_name)
     # sdk
     target_link_libraries(${example_name} PRIVATE ${CMAKE_THREAD_LIBS_INIT} ax_interpreter ax_sys ax_ivps)
     target_link_directories(${example_name} PRIVATE ${BSP_MSP_DIR}/lib)
+    # sherpa-onnx
+#    target_include_directories(${example_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${BSP_MSP_DIR}/../../../third-party/sherpa-onnx/static/include/)
+#    target_include_directories(${example_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${BSP_MSP_DIR}/../../../third-party/sherpa-onnx/shared/include/)
+    # ax audio
+    target_include_directories(${example_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${BSP_MSP_DIR}/../../../third-party/tinyalsa/include/)
+    target_include_directories(${example_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${BSP_MSP_DIR}/../../../third-party/libsamplerate/include/)
+    target_include_directories(${example_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${BSP_MSP_DIR}/../../../third-party/opus/include/)
+    target_include_directories(${example_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${BSP_MSP_DIR}/../../../third-party/fdk-aac/include/)
+    # sherpa-onnx
+#    target_link_directories(${example_name} PRIVATE ${BSP_MSP_DIR}/../../../third-party/sherpa-onnx/static/lib/)
+#    target_link_directories(${example_name} PRIVATE ${BSP_MSP_DIR}/../../../third-party/sherpa-onnx/shared/lib/)
+    # ax audio
+    target_link_directories(${example_name} PRIVATE ${BSP_MSP_DIR}/../../../third-party/tinyalsa/lib/arm64/glibc)
+    target_link_directories(${example_name} PRIVATE ${BSP_MSP_DIR}/../../../third-party/libsamplerate/lib/arm64/glibc)
+    target_link_directories(${example_name} PRIVATE ${BSP_MSP_DIR}/../../../third-party/fdk-aac/lib/arm64/glibc)
+    target_link_directories(${example_name} PRIVATE ${BSP_MSP_DIR}/../../../third-party/opus/lib/arm64/glibc)
+    # sherpa-onnx
+#    target_link_libraries(${example_name} PRIVATE ${CMAKE_THREAD_LIBS_INIT} cargs sherpa-onnx-c-api onnxruntime)
+    # ax audio
+    target_link_libraries(${example_name} PRIVATE ${CMAKE_THREAD_LIBS_INIT} ax_audio ax_audio_3a ax_fdk ax_opus tinyalsa samplerate fdk-aac opus)
 
     target_compile_options (${example_name} PUBLIC $<$<COMPILE_LANGUAGE:C,CXX>: -O3>)
     
