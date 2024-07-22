@@ -13,13 +13,8 @@ std::vector<pid_t> child_pids;
 
 bool stop = false;
 
-// static void Handler(int sig) {
-//     stop = true;
-//     fprintf(stderr, "\nCaught Ctrl + C. Exiting...\n");
-// }
-
 void run_audio_input() {
-    std::string command = "LD_LIBRARY_PATH=/root/ax-audio/install/lib /root/ax-audio/install/bin/ax_audio_input ai -D 0 -d 0 -r 16000 -p 160 --layout 2 --aenc-chns 2 -w 1";
+    std::string command = "LD_LIBRARY_PATH=/root/ax-audio/install/lib /root/ax-audio/install/bin/ax_audio_input_asr ai -D 0 -d 0 -r 16000 -p 160 --layout 2 --aenc-chns 2 -w 1";
     pid_t pid = fork();
     if (pid == 0) {
         // 子进程
@@ -34,7 +29,7 @@ void run_audio_input() {
 }
 
 void run_sherpa_asr() {
-    std::string command = "/root/sherpa/install/bin/sherpa-onnx --tokens=/root/sherpa/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/tokens.txt --encoder=/root/sherpa/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/encoder-epoch-99-avg-1.int8.onnx --decoder=/root/sherpa/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/decoder-epoch-99-avg-1.int8.onnx --joiner=/root/sherpa/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/joiner-epoch-99-avg-1.int8.onnx audio.wav";
+    std::string command = "/root/sherpa/install/bin/sherpa-onnx --tokens=/root/sherpa/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/tokens.txt --encoder=/root/sherpa/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/encoder-epoch-99-avg-1.int8.onnx --decoder=/root/sherpa/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/decoder-epoch-99-avg-1.onnx --joiner=/root/sherpa/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/joiner-epoch-99-avg-1.int8.onnx /root/ax-audio/install/bin/audio_*.wav";
     pid_t pid = fork();
     if (pid == 0) {
         // 子进程
@@ -79,9 +74,13 @@ void stop_processes() {
     stop_sherpa_asr();
 }
 
+static void Handler(int sig) {
+    stop = true;
+    stop_processes();
+    fprintf(stderr, "\nCaught Ctrl + C. Exiting...\n");
+}
 
 int main(int argc, char* argv[]) {
-    // signal(SIGINT, Handler);
     if (argc != 2) {
         std::cerr << "Usage: " << argv[0] << " <runtime_in_seconds>" << std::endl;
         return 1;
@@ -89,20 +88,20 @@ int main(int argc, char* argv[]) {
     int runtime = std::stoi(argv[1]);
     std::cout << "Running ./ax_audio_input ..." << std::endl;
     run_audio_input();
-
     std::this_thread::sleep_for(std::chrono::seconds(runtime));
-    stop_audio_input();
-
     std::cout << "Running ./sherpa-onnx ..." << std::endl;
     run_sherpa_asr();
 
-    // while (!stop) {
-    //
-    // }
-
-    if (stop) {
-        std::cout << "Stopping ./ax_audio_asr ..." << std::endl;
-        stop_processes();
+    while (1) {
+        signal(SIGINT, Handler);
+        // run_audio_input();
+        // std::this_thread::sleep_for(std::chrono::seconds(runtime));
+        // std::cout << "Running ./audio_input ..." << std::endl;
+        // stop_audio_input();
+        // if (stop) {
+        //     std::cout << "Stopping ./ax_audio_asr ..." << std::endl;
+        //     stop_processes();
+        // }
     }
 
     return 0;

@@ -638,7 +638,6 @@ static int AudioInput()
             if (ret) {
                 printf("AX_AI_ReleaseFrame failed! ret=%x\n",ret);
             }
-            printf("Now totalFrames = %d\n", totalFrames);
             if (totalFrames == 60000) {
                 printf("Stop totalFrames = %d\n", totalFrames);
                 // gLoopExit = 1;
