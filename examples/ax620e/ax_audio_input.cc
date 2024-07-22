@@ -112,8 +112,6 @@ static const char *gMixFile = NULL;
 static AX_S32 gAsyncTest = 0;
 static const char *gAsyncTestName = NULL;
 static AX_S32 gAsyncTestNumber = 10;
-clock_t start_time, current_time;
-double elapsed_time = 0.0;
 
 int BitsToFormat(unsigned int bits, AX_AUDIO_BIT_WIDTH_E* format)
 {
@@ -542,11 +540,6 @@ static void SigInt(int sigNo)
     gLoopExit = 1;
 }
 
-void timer_handler(int signum) {
-    printf("Timer signal received!\n");
-    gLoopExit = 1;
-}
-
 static void PrintHelp()
 {
     printf("usage: sample_audio      <command> <args>\n");
@@ -897,7 +890,6 @@ static int AudioInput()
     }
 
     AX_S32 getNumber = 0;
-    alarm(10);
     while (1) {
         ret = AX_AI_GetFrame(card, device, &stFrame, -1);
         if (ret != AX_SUCCESS) {
@@ -913,11 +905,11 @@ static int AudioInput()
         if (ret) {
             printf("AX_AI_ReleaseFrame failed! ret=%x\n",ret);
         }
+
         if (((gGetNumber > 0) && (getNumber >= gGetNumber)) || gLoopExit) {
             printf("getNumber: %d\n", getNumber);
             break;
         }
-
     }
     if (gWriteFrames) {
         if (gIsWave) {
@@ -930,13 +922,6 @@ static int AudioInput()
 
         if(output_file)
             fclose(output_file);
-    }
-
-    current_time = clock();
-    elapsed_time += (double)(current_time - start_time) / CLOCKS_PER_SEC;
-    if (elapsed_time >= 10.0) {
-        printf("Camp stop\n");
-        gLoopExit = 1;
     }
 
     printf("totalFrames: %u\n", totalFrames);
@@ -2086,7 +2071,6 @@ int main(int argc, char *argv[])
     AX_S32 c;
     AX_S32 isExit = 0;
     signal(SIGINT, SigInt);
-    signal(SIGALRM, timer_handler);
 
     while (1) {
         int option_index = 0;
