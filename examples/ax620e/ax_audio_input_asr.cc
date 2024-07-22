@@ -113,6 +113,8 @@ static AX_S32 gAsyncTest = 0;
 static const char *gAsyncTestName = NULL;
 static AX_S32 gAsyncTestNumber = 10;
 
+bool stop = false;
+
 int BitsToFormat(unsigned int bits, AX_AUDIO_BIT_WIDTH_E* format)
 {
     switch (bits) {
@@ -392,289 +394,300 @@ enum LONG_OPTION {
 
 static int AudioInput()
 {
-    int ret = 0;
-    unsigned int card = gCardNum;
-    unsigned int device = gDeviceNum;
-    AX_AUDIO_BIT_WIDTH_E format;
-    unsigned int totalFrames = 0;
-    FILE *output_file = NULL;
+    int index = 0;
+    while (!stop) {
+        int ret = 0;
+        unsigned int card = gCardNum;
+        unsigned int device = gDeviceNum;
+        AX_AUDIO_BIT_WIDTH_E format;
+        unsigned int totalFrames = 0;
+        FILE *output_file = NULL;
 
-    if (BitsToFormat(gBits, &format))
-        return -1;
+        if (BitsToFormat(gBits, &format))
+            return -1;
 
-    ret = AX_SYS_Init();
-    if (AX_SUCCESS != ret) {
-        printf("AX_SYS_Init failed! Error Code:0x%X\n", ret);
-        return -1;
-    }
-
-    AX_POOL_CONFIG_T stPoolConfig;
-    stPoolConfig.MetaSize = 8192;
-    stPoolConfig.BlkSize = 7680;
-    stPoolConfig.BlkCnt = 33;
-    stPoolConfig.IsMergeMode = AX_FALSE;
-    stPoolConfig.CacheMode = AX_POOL_CACHE_MODE_NONCACHE;
-    strcpy((char *)stPoolConfig.PartitionName, "anonymous");
-    AX_POOL PoolId = AX_POOL_CreatePool(&stPoolConfig);
-    if (PoolId == AX_INVALID_POOLID) {
-        printf("AX_POOL_CreatePool failed! PoolId:%d\n", PoolId);
-        AX_SYS_Deinit();
-    }
-
-    AX_AUDIO_FRAME_T stFrame;
-    char output_file_name[FILE_NAME_SIZE];
-    if (gOutputFile) {
-        strncpy(output_file_name, gOutputFile, FILE_NAME_SIZE-1);
-    } else {
-        snprintf(output_file_name, FILE_NAME_SIZE, "audio.%s", gIsWave ? "wav" : "raw");
-    }
-    if (gWriteFrames) {
-        output_file = fopen(output_file_name, "wb");
-        assert(output_file != NULL);
-        if (gIsWave) {
-            LeaveWaveHeader(output_file);
-        }
-    }
-
-    ret = AX_AI_Init();
-    if (ret) {
-        printf("AX_AI_Init failed! Error Code:0x%X\n", ret);
-        AX_POOL_DestroyPool(PoolId);
-    }
-
-    AX_AI_ATTR_T stAttr;
-    stAttr.enBitwidth = format;
-    stAttr.enLinkMode = AX_UNLINK_MODE;
-    stAttr.enSamplerate = (AX_AUDIO_SAMPLE_RATE_E)gRate;
-    stAttr.enLayoutMode = gLayoutMode;
-    stAttr.U32Depth = 30;
-    stAttr.u32PeriodSize = gPeriodSize;
-    stAttr.u32PeriodCount = gPeriodCount;
-    stAttr.u32ChnCnt = gChannels;
-    ret = AX_AI_SetPubAttr(card,device,&stAttr);
-    if(ret){
-        printf("AX_AI_SetPubAttr failed! ret = %x\n", ret);
-        AX_AI_DeInit();
-    }
-
-    ret = AX_AI_AttachPool(card,device,PoolId);
-    if(ret){
-        printf("AX_AI_AttachPool failed! ret = %x\n", ret);
-        AX_AI_DeInit();
-    }
-
-    unsigned int outRate = gRate;
-    AX_AP_UPTALKVQE_ATTR_T stVqeAttr;
-    memset(&stVqeAttr, 0, sizeof(stVqeAttr));
-    stVqeAttr.s32SampleRate = gVqeSampleRate;
-    stVqeAttr.u32FrameSamples = 160;
-    memcpy(&stVqeAttr.stNsCfg, &gNsCfg, sizeof(AX_NS_CONFIG_T));
-    memcpy(&stVqeAttr.stAgcCfg, &gAgcCfg, sizeof(AX_AGC_CONFIG_T));
-    memcpy(&stVqeAttr.stAecCfg, &gAecCfg, sizeof(AX_AEC_CONFIG_T));
-    if (IsUpTalkVqeEnabled(&stVqeAttr)) {
-        ret = AX_AI_SetUpTalkVqeAttr(card, device, &stVqeAttr);
-        if(ret){
-            printf("AX_AI_SetUpTalkVqeAttr failed! ret = %x\n",ret);
-            AX_AI_DetachPool(card, device);
-        }
-        outRate = gVqeSampleRate;
-    }
-
-    if (gHpfCfg.bEnable) {
-        AX_ACODEC_FREQ_ATTR_T stHpfAttr;
-        stHpfAttr.s32Freq = gHpfCfg.s32Freq;
-        stHpfAttr.s32GainDb = gHpfCfg.s32GainDb;
-        stHpfAttr.s32Samplerate = gRate;
-        ret = AX_ACODEC_RxHpfSetAttr(card, &stHpfAttr);
-        if(ret){
-            printf("AX_ACODEC_RxHpfSetAttr failed! ret = %x\n", ret);
-            AX_AI_DetachPool(card, device);
-        }
-        ret = AX_ACODEC_RxHpfEnable(card);
-        if(ret){
-            printf("AX_ACODEC_RxHpfEnable failed! ret = %x\n", ret);
-            AX_AI_DetachPool(card, device);
-        }
-    }
-    if (gLpfCfg.bEnable) {
-        AX_ACODEC_FREQ_ATTR_T stLpfAttr;
-        stLpfAttr.s32Freq = gLpfCfg.s32Freq;
-        stLpfAttr.s32GainDb = gLpfCfg.s32GainDb;
-        stLpfAttr.s32Samplerate = gRate;
-        ret = AX_ACODEC_RxLpfSetAttr(card, &stLpfAttr);
-        if(ret){
-            printf("AX_ACODEC_RxLpfSetAttr failed! ret = %x\n", ret);
-            if (gHpfCfg.bEnable) {
-                ret = AX_ACODEC_RxHpfDisable(card);
-                if(ret){
-                    printf("AX_ACODEC_RxHpfDisable failed! ret= %x\n",ret);
-                }
-            }
-        }
-        ret = AX_ACODEC_RxLpfEnable(card);
-        if(ret){
-            printf("AX_ACODEC_RxLpfEnable failed! ret = %x\n", ret);
-            if (gHpfCfg.bEnable) {
-                ret = AX_ACODEC_RxHpfDisable(card);
-                if(ret){
-                    printf("AX_ACODEC_RxHpfDisable failed! ret= %x\n",ret);
-                }
-            }
-        }
-    }
-    if (gEqCfg.bEnable) {
-        AX_ACODEC_EQ_ATTR_T stEqAttr;
-        memcpy(&stEqAttr.s32GainDb, &gEqCfg.s32GainDb, sizeof(stEqAttr.s32GainDb));
-        stEqAttr.s32Samplerate = gRate;
-        ret = AX_ACODEC_RxEqSetAttr(card, &stEqAttr);
-        if(ret){
-            printf("AX_ACODEC_RxEqSetAttr failed! ret = %x\n", ret);
-            if (gLpfCfg.bEnable) {
-                ret = AX_ACODEC_RxLpfDisable(card);
-                if(ret){
-                    printf("AX_ACODEC_RxLpfDisable failed! ret= %x\n",ret);
-                }
-            }
-        }
-        ret = AX_ACODEC_RxEqEnable(card);
-        if(ret){
-            printf("AX_ACODEC_RxEqEnable failed! ret = %x\n", ret);
-            if (gLpfCfg.bEnable) {
-                ret = AX_ACODEC_RxLpfDisable(card);
-                if(ret){
-                    printf("AX_ACODEC_RxLpfDisable failed! ret= %x\n",ret);
-                }
-            }
-        }
-    }
-
-    ret = AX_AI_EnableDev(card,device);
-    if (ret){
-        printf("AX_AI_EnableDev failed! ret = %x \n",ret);
-        if (gEqCfg.bEnable) {
-            ret = AX_ACODEC_RxEqDisable(card);
-            if(ret){
-                printf("AX_ACODEC_RxEqDisable failed! ret= %x\n",ret);
-            }
-        }
-    }
-
-    if (gResample) {
-        AX_AUDIO_SAMPLE_RATE_E enOutSampleRate = (AX_AUDIO_SAMPLE_RATE_E)gResRate;
-        ret = AX_AI_EnableResample(card, device, enOutSampleRate);
-        if(ret){
-            printf("AX_AI_EnableResample failed! ret = %x,\n",ret);
-            AX_AI_DisableDev(card, device);
-        }
-        outRate = gResRate;
-    }
-
-    ret = AX_AI_SetVqeVolume(card, device, gVqeVolume);
-    if(ret){
-        printf("AX_AI_SetVqeVolume failed! ret = %x\n", ret);
-        AX_AI_DisableDev(card, device);
-    }
-
-    if (gSaveFile) {
-        AX_AUDIO_SAVE_FILE_INFO_T stSaveFileInfo;
-        stSaveFileInfo.bCfg = AX_TRUE;
-        strncpy(stSaveFileInfo.aFilePath, "./", AX_MAX_AUDIO_FILE_PATH_LEN);
-        strncpy(stSaveFileInfo.aFileName, "default", AX_MAX_AUDIO_FILE_NAME_LEN);
-        stSaveFileInfo.u32FileSize = 1024;
-        ret = AX_AI_SaveFile(card, device, &stSaveFileInfo);
-        if(ret){
-            printf("AX_AI_SaveFile failed! ret = %x\n", ret);
-            AX_AI_DisableDev(card, device);
-        }
-    }
-
-    SAMPLE_AI_AED_RECV_ARGS_S aiAedRecvArgs;
-    aiAedRecvArgs.aiCardId = card;
-    aiAedRecvArgs.aiDevId = device;
-    pthread_t aedRecvTid;
-    if (gDbDetection) {
-        AX_AED_ATTR_T stAedAttr;
-        stAedAttr.bDbDetection = (AX_BOOL)gDbDetection;
-        ret = AX_AI_SetAedAttr(card, device, &stAedAttr);
-        if(ret){
-            printf("AX_AI_SetAedAttr failed! ret = %x\n", ret);
-            AX_AI_DisableDev(card, device);
+        ret = AX_SYS_Init();
+        if (AX_SUCCESS != ret) {
+            printf("AX_SYS_Init failed! Error Code:0x%X\n", ret);
+            return -1;
         }
 
-        ret = AX_AI_EnableAed(card, device);
-        if(ret){
-            printf("AX_AI_EnableAed failed! ret = %x\n", ret);
-            AX_AI_DisableDev(card, device);
-        }
-
-        pthread_create(&aedRecvTid, NULL, AiAedRecvThread, (void *)&aiAedRecvArgs);
-    }
-
-    SAMPLE_AI_CTRL_ARGS_S aiCtrlArgs;
-    aiCtrlArgs.aiCardId = card;
-    aiCtrlArgs.aiDevId = device;
-    pthread_t ctrlTid;
-    if (gCtrl) {
-        pthread_create(&ctrlTid, NULL, AiCtrlThread, (void *)&aiCtrlArgs);
-    }
-
-    AX_S32 getNumber = 0;
-    while (1) {
-        ret = AX_AI_GetFrame(card, device, &stFrame, -1);
-        if (ret != AX_SUCCESS) {
-            printf("AX_AI_GetFrame error, ret: %x\n",ret);
-            break;
-        }
-        getNumber++;
-        if (gWriteFrames)
-            fwrite(stFrame.u64VirAddr, 2, stFrame.u32Len/2, output_file);
-
-        totalFrames += stFrame.u32Len/2;
-        ret = AX_AI_ReleaseFrame(card,device,&stFrame);
-        if (ret) {
-            printf("AX_AI_ReleaseFrame failed! ret=%x\n",ret);
-        }
-
-        if (((gGetNumber > 0) && (getNumber >= gGetNumber)) || gLoopExit) {
-            printf("getNumber: %d\n", getNumber);
-            break;
-        }
-    }
-    if (gWriteFrames) {
-        if (gIsWave) {
-            if ((gChannels == 2) && (stAttr.enLayoutMode != AX_AI_MIC_MIC) && (stAttr.enLayoutMode != AX_AI_DOORBELL)) {
-                WriteWaveHeader(output_file, 1, outRate, gBits, totalFrames);
-            } else {
-                WriteWaveHeader(output_file, gChannels, outRate, gBits, totalFrames/2);
-            }
-        }
-
-        if(output_file)
-            fclose(output_file);
-    }
-
-    printf("totalFrames: %u\n", totalFrames);
-    printf("ai success.\n");
-
-    if (gCtrl) {
-        pthread_join(ctrlTid, NULL);
-    }
-
-    if (gDbDetection) {
-        pthread_join(aedRecvTid, NULL);
-    }
-
-    if (gDbDetection) {
-       ret = AX_AI_DisableAed(card, device);
-        if(ret){
-            printf("AX_AI_DisableAed failed! ret= %x\n",ret);
+        AX_POOL_CONFIG_T stPoolConfig;
+        stPoolConfig.MetaSize = 8192;
+        stPoolConfig.BlkSize = 7680;
+        stPoolConfig.BlkCnt = 33;
+        stPoolConfig.IsMergeMode = AX_FALSE;
+        stPoolConfig.CacheMode = AX_POOL_CACHE_MODE_NONCACHE;
+        strcpy((char *)stPoolConfig.PartitionName, "anonymous");
+        AX_POOL PoolId = AX_POOL_CreatePool(&stPoolConfig);
+        if (PoolId == AX_INVALID_POOLID) {
+            printf("AX_POOL_CreatePool failed! PoolId:%d\n", PoolId);
             AX_SYS_Deinit();
         }
+
+        AX_AUDIO_FRAME_T stFrame;
+        char output_file_name[FILE_NAME_SIZE];
+        if (gOutputFile) {
+            strncpy(output_file_name, gOutputFile, FILE_NAME_SIZE-1);
+        } else {
+            snprintf(output_file_name, FILE_NAME_SIZE, "audio_%d.%s", index, gIsWave ? "wav" : "raw");
+        }
+        if (gWriteFrames) {
+            output_file = fopen(output_file_name, "wb");
+            assert(output_file != NULL);
+            if (gIsWave) {
+                LeaveWaveHeader(output_file);
+            }
+        }
+
+        ret = AX_AI_Init();
+        if (ret) {
+            printf("AX_AI_Init failed! Error Code:0x%X\n", ret);
+            AX_POOL_DestroyPool(PoolId);
+        }
+
+        AX_AI_ATTR_T stAttr;
+        stAttr.enBitwidth = format;
+        stAttr.enLinkMode = AX_UNLINK_MODE;
+        stAttr.enSamplerate = (AX_AUDIO_SAMPLE_RATE_E)gRate;
+        stAttr.enLayoutMode = gLayoutMode;
+        stAttr.U32Depth = 30;
+        stAttr.u32PeriodSize = gPeriodSize;
+        stAttr.u32PeriodCount = gPeriodCount;
+        stAttr.u32ChnCnt = gChannels;
+        ret = AX_AI_SetPubAttr(card,device,&stAttr);
+        if(ret){
+            printf("AX_AI_SetPubAttr failed! ret = %x\n", ret);
+            AX_AI_DeInit();
+        }
+
+        ret = AX_AI_AttachPool(card,device,PoolId);
+        if(ret){
+            printf("AX_AI_AttachPool failed! ret = %x\n", ret);
+            AX_AI_DeInit();
+        }
+
+        unsigned int outRate = gRate;
+        AX_AP_UPTALKVQE_ATTR_T stVqeAttr;
+        memset(&stVqeAttr, 0, sizeof(stVqeAttr));
+        stVqeAttr.s32SampleRate = gVqeSampleRate;
+        stVqeAttr.u32FrameSamples = 160;
+        memcpy(&stVqeAttr.stNsCfg, &gNsCfg, sizeof(AX_NS_CONFIG_T));
+        memcpy(&stVqeAttr.stAgcCfg, &gAgcCfg, sizeof(AX_AGC_CONFIG_T));
+        memcpy(&stVqeAttr.stAecCfg, &gAecCfg, sizeof(AX_AEC_CONFIG_T));
+        if (IsUpTalkVqeEnabled(&stVqeAttr)) {
+            ret = AX_AI_SetUpTalkVqeAttr(card, device, &stVqeAttr);
+            if(ret){
+                printf("AX_AI_SetUpTalkVqeAttr failed! ret = %x\n",ret);
+                AX_AI_DetachPool(card, device);
+            }
+            outRate = gVqeSampleRate;
+        }
+
+        if (gHpfCfg.bEnable) {
+            AX_ACODEC_FREQ_ATTR_T stHpfAttr;
+            stHpfAttr.s32Freq = gHpfCfg.s32Freq;
+            stHpfAttr.s32GainDb = gHpfCfg.s32GainDb;
+            stHpfAttr.s32Samplerate = gRate;
+            ret = AX_ACODEC_RxHpfSetAttr(card, &stHpfAttr);
+            if(ret){
+                printf("AX_ACODEC_RxHpfSetAttr failed! ret = %x\n", ret);
+                AX_AI_DetachPool(card, device);
+            }
+            ret = AX_ACODEC_RxHpfEnable(card);
+            if(ret){
+                printf("AX_ACODEC_RxHpfEnable failed! ret = %x\n", ret);
+                AX_AI_DetachPool(card, device);
+            }
+        }
+        if (gLpfCfg.bEnable) {
+            AX_ACODEC_FREQ_ATTR_T stLpfAttr;
+            stLpfAttr.s32Freq = gLpfCfg.s32Freq;
+            stLpfAttr.s32GainDb = gLpfCfg.s32GainDb;
+            stLpfAttr.s32Samplerate = gRate;
+            ret = AX_ACODEC_RxLpfSetAttr(card, &stLpfAttr);
+            if(ret){
+                printf("AX_ACODEC_RxLpfSetAttr failed! ret = %x\n", ret);
+                if (gHpfCfg.bEnable) {
+                    ret = AX_ACODEC_RxHpfDisable(card);
+                    if(ret){
+                        printf("AX_ACODEC_RxHpfDisable failed! ret= %x\n",ret);
+                    }
+                }
+            }
+            ret = AX_ACODEC_RxLpfEnable(card);
+            if(ret){
+                printf("AX_ACODEC_RxLpfEnable failed! ret = %x\n", ret);
+                if (gHpfCfg.bEnable) {
+                    ret = AX_ACODEC_RxHpfDisable(card);
+                    if(ret){
+                        printf("AX_ACODEC_RxHpfDisable failed! ret= %x\n",ret);
+                    }
+                }
+            }
+        }
+        if (gEqCfg.bEnable) {
+            AX_ACODEC_EQ_ATTR_T stEqAttr;
+            memcpy(&stEqAttr.s32GainDb, &gEqCfg.s32GainDb, sizeof(stEqAttr.s32GainDb));
+            stEqAttr.s32Samplerate = gRate;
+            ret = AX_ACODEC_RxEqSetAttr(card, &stEqAttr);
+            if(ret){
+                printf("AX_ACODEC_RxEqSetAttr failed! ret = %x\n", ret);
+                if (gLpfCfg.bEnable) {
+                    ret = AX_ACODEC_RxLpfDisable(card);
+                    if(ret){
+                        printf("AX_ACODEC_RxLpfDisable failed! ret= %x\n",ret);
+                    }
+                }
+            }
+            ret = AX_ACODEC_RxEqEnable(card);
+            if(ret){
+                printf("AX_ACODEC_RxEqEnable failed! ret = %x\n", ret);
+                if (gLpfCfg.bEnable) {
+                    ret = AX_ACODEC_RxLpfDisable(card);
+                    if(ret){
+                        printf("AX_ACODEC_RxLpfDisable failed! ret= %x\n",ret);
+                    }
+                }
+            }
+        }
+
+        ret = AX_AI_EnableDev(card,device);
+        if (ret){
+            printf("AX_AI_EnableDev failed! ret = %x \n",ret);
+            if (gEqCfg.bEnable) {
+                ret = AX_ACODEC_RxEqDisable(card);
+                if(ret){
+                    printf("AX_ACODEC_RxEqDisable failed! ret= %x\n",ret);
+                }
+            }
+        }
+
+        if (gResample) {
+            AX_AUDIO_SAMPLE_RATE_E enOutSampleRate = (AX_AUDIO_SAMPLE_RATE_E)gResRate;
+            ret = AX_AI_EnableResample(card, device, enOutSampleRate);
+            if(ret){
+                printf("AX_AI_EnableResample failed! ret = %x,\n",ret);
+                AX_AI_DisableDev(card, device);
+            }
+            outRate = gResRate;
+        }
+
+        ret = AX_AI_SetVqeVolume(card, device, gVqeVolume);
+        if(ret){
+            printf("AX_AI_SetVqeVolume failed! ret = %x\n", ret);
+            AX_AI_DisableDev(card, device);
+        }
+
+        if (gSaveFile) {
+            AX_AUDIO_SAVE_FILE_INFO_T stSaveFileInfo;
+            stSaveFileInfo.bCfg = AX_TRUE;
+            strncpy(stSaveFileInfo.aFilePath, "./", AX_MAX_AUDIO_FILE_PATH_LEN);
+            strncpy(stSaveFileInfo.aFileName, "default", AX_MAX_AUDIO_FILE_NAME_LEN);
+            stSaveFileInfo.u32FileSize = 1024;
+            ret = AX_AI_SaveFile(card, device, &stSaveFileInfo);
+            if(ret){
+                printf("AX_AI_SaveFile failed! ret = %x\n", ret);
+                AX_AI_DisableDev(card, device);
+            }
+        }
+
+        SAMPLE_AI_AED_RECV_ARGS_S aiAedRecvArgs;
+        aiAedRecvArgs.aiCardId = card;
+        aiAedRecvArgs.aiDevId = device;
+        pthread_t aedRecvTid;
+        if (gDbDetection) {
+            AX_AED_ATTR_T stAedAttr;
+            stAedAttr.bDbDetection = (AX_BOOL)gDbDetection;
+            ret = AX_AI_SetAedAttr(card, device, &stAedAttr);
+            if(ret){
+                printf("AX_AI_SetAedAttr failed! ret = %x\n", ret);
+                AX_AI_DisableDev(card, device);
+            }
+
+            ret = AX_AI_EnableAed(card, device);
+            if(ret){
+                printf("AX_AI_EnableAed failed! ret = %x\n", ret);
+                AX_AI_DisableDev(card, device);
+            }
+
+            pthread_create(&aedRecvTid, NULL, AiAedRecvThread, (void *)&aiAedRecvArgs);
+        }
+
+        SAMPLE_AI_CTRL_ARGS_S aiCtrlArgs;
+        aiCtrlArgs.aiCardId = card;
+        aiCtrlArgs.aiDevId = device;
+        pthread_t ctrlTid;
+        if (gCtrl) {
+            pthread_create(&ctrlTid, NULL, AiCtrlThread, (void *)&aiCtrlArgs);
+        }
+
+        AX_S32 getNumber = 0;
+        while (1) {
+            ret = AX_AI_GetFrame(card, device, &stFrame, -1);
+            if (ret != AX_SUCCESS) {
+                printf("AX_AI_GetFrame error, ret: %x\n",ret);
+                break;
+            }
+            getNumber++;
+            if (gWriteFrames)
+                fwrite(stFrame.u64VirAddr, 2, stFrame.u32Len/2, output_file);
+
+            totalFrames += stFrame.u32Len/2;
+            ret = AX_AI_ReleaseFrame(card,device,&stFrame);
+            if (ret) {
+                printf("AX_AI_ReleaseFrame failed! ret=%x\n",ret);
+            }
+            printf("Now totalFrames = %d\n", totalFrames);
+            if (totalFrames == 60000) {
+                printf("Stop totalFrames = %d\n", totalFrames);
+                // gLoopExit = 1;
+                break;
+            }
+            if (((gGetNumber > 0) && (getNumber >= gGetNumber)) || gLoopExit) {
+                printf("getNumber: %d\n", getNumber);
+                return 0;
+            }
+        }
+        if (gWriteFrames) {
+            if (gIsWave) {
+                if ((gChannels == 2) && (stAttr.enLayoutMode != AX_AI_MIC_MIC) && (stAttr.enLayoutMode != AX_AI_DOORBELL)) {
+                    WriteWaveHeader(output_file, 1, outRate, gBits, totalFrames);
+                } else {
+                    WriteWaveHeader(output_file, gChannels, outRate, gBits, totalFrames/2);
+                }
+            }
+
+            if(output_file) {
+                fclose(output_file);
+                index++;
+            }
+        }
+
+        printf("totalFrames: %u\n", totalFrames);
+        printf("ai success.\n");
+        printf("Index = %d\n", index);
+        if (index == 10)
+            index = 0;
+
+        if (gCtrl) {
+            pthread_join(ctrlTid, NULL);
+        }
+
+        if (gDbDetection) {
+            pthread_join(aedRecvTid, NULL);
+        }
+
+        if (gDbDetection) {
+            ret = AX_AI_DisableAed(card, device);
+            if(ret){
+                printf("AX_AI_DisableAed failed! ret= %x\n",ret);
+                AX_SYS_Deinit();
+            }
+        }
+
     }
-
-    return 0;
 }
-
 int main(int argc, char *argv[])
 {
     extern int optind;
