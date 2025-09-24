@@ -1,7 +1,7 @@
 /*
  * AXERA is pleased to support the open source community by making ax-samples available.
  * 
- * Copyright (c) 2022, AXERA Semiconductor (Shanghai) Co., Ltd. All rights reserved.
+ * Copyright (c) 2024, Axera Semiconductor Co., Ltd. All rights reserved.
  * 
  * Licensed under the BSD 3-Clause License (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -53,6 +53,7 @@ namespace detection
     typedef struct PalmObject
     {
         cv::Rect_<float> rect;
+        int label;
         float prob;
         cv::Point2f vertices[4];
         cv::Point2f landmarks[7];
@@ -114,13 +115,13 @@ namespace detection
                 j--;
             }
         }
-#pragma omp parallel sections
+// #pragma omp parallel sections
         {
-#pragma omp section
+// #pragma omp section
             {
                 if (left < j) qsort_descent_inplace(faceobjects, left, j);
             }
-#pragma omp section
+// #pragma omp section
             {
                 if (i < right) qsort_descent_inplace(faceobjects, i, right);
             }
@@ -1089,6 +1090,7 @@ namespace detection
                         obj.rect.width = (x1 - x0) / (float)letterbox_cols;
                         obj.rect.height = (y1 - y0) / (float)letterbox_rows;
                         obj.prob = final_score;
+                        obj.label = class_index;
 
                         const float* landmark_ptr = feature_ptr + 6;
                         std::vector<cv::Point2f> tmp(7);
@@ -1804,15 +1806,27 @@ namespace detection
     {
         static const std::vector<cv::Scalar> COCO_COLORS = {
             {128, 56, 0, 255}, {128, 226, 255, 0}, {128, 0, 94, 255}, {128, 0, 37, 255}, {128, 0, 255, 94}, {128, 255, 226, 0}, {128, 0, 18, 255}, {128, 255, 151, 0}, {128, 170, 0, 255}, {128, 0, 255, 56}, {128, 255, 0, 75}, {128, 0, 75, 255}, {128, 0, 255, 169}, {128, 255, 0, 207}, {128, 75, 255, 0}, {128, 207, 0, 255}, {128, 37, 0, 255}, {128, 0, 207, 255}, {128, 94, 0, 255}, {128, 0, 255, 113}, {128, 255, 18, 0}, {128, 255, 0, 56}, {128, 18, 0, 255}, {128, 0, 255, 226}, {128, 170, 255, 0}, {128, 255, 0, 245}, {128, 151, 255, 0}, {128, 132, 255, 0}, {128, 75, 0, 255}, {128, 151, 0, 255}, {128, 0, 151, 255}, {128, 132, 0, 255}, {128, 0, 255, 245}, {128, 255, 132, 0}, {128, 226, 0, 255}, {128, 255, 37, 0}, {128, 207, 255, 0}, {128, 0, 255, 207}, {128, 94, 255, 0}, {128, 0, 226, 255}, {128, 56, 255, 0}, {128, 255, 94, 0}, {128, 255, 113, 0}, {128, 0, 132, 255}, {128, 255, 0, 132}, {128, 255, 170, 0}, {128, 255, 0, 188}, {128, 113, 255, 0}, {128, 245, 0, 255}, {128, 113, 0, 255}, {128, 255, 188, 0}, {128, 0, 113, 255}, {128, 255, 0, 0}, {128, 0, 56, 255}, {128, 255, 0, 113}, {128, 0, 255, 188}, {128, 255, 0, 94}, {128, 255, 0, 18}, {128, 18, 255, 0}, {128, 0, 255, 132}, {128, 0, 188, 255}, {128, 0, 245, 255}, {128, 0, 169, 255}, {128, 37, 255, 0}, {128, 255, 0, 151}, {128, 188, 0, 255}, {128, 0, 255, 37}, {128, 0, 255, 0}, {128, 255, 0, 170}, {128, 255, 0, 37}, {128, 255, 75, 0}, {128, 0, 0, 255}, {128, 255, 207, 0}, {128, 255, 0, 226}, {128, 255, 245, 0}, {128, 188, 255, 0}, {128, 0, 255, 18}, {128, 0, 255, 75}, {128, 0, 255, 151}, {128, 255, 56, 0}, {128, 245, 255, 0}};
+
+        static int frame_count = 0;
+        static double last_time = (double)cv::getTickCount();
+        static double fps = 0.0;
+
+        frame_count++;
+        double current_time = (double)cv::getTickCount();
+        double elapsed = (current_time - last_time) / cv::getTickFrequency(); // 秒
+
+        if (elapsed >= 1.0)
+        {
+            fps = frame_count / elapsed;
+            frame_count = 0;
+            last_time = current_time;
+        }
+
         cv::Mat image = bgr.clone();
 
         for (size_t i = 0; i < objects.size(); i++)
         {
             const Object& obj = objects[i];
-
-            fprintf(stdout, "%2d: %3.0f%%, [%4.0f, %4.0f, %4.0f, %4.0f], %s\n", obj.label, obj.prob * 100, obj.rect.x,
-                    obj.rect.y, obj.rect.x + obj.rect.width, obj.rect.y + obj.rect.height, class_names[obj.label]);
-
             cv::rectangle(image, obj.rect, COCO_COLORS[obj.label], thickness);
 
             char text[256];
@@ -1835,7 +1849,15 @@ namespace detection
                         cv::Scalar(255, 255, 255), thickness);
         }
 
-        cv::imwrite(std::string(output_name) + ".jpg", image);
+        char fps_text[64];
+        sprintf(fps_text, "FPS: %.2f", fps);
+        int baseLine = 0;
+        cv::Size fps_size = cv::getTextSize(fps_text, cv::FONT_HERSHEY_SIMPLEX, 0.5, thickness, &baseLine);
+        cv::rectangle(image, cv::Rect(0, 0, fps_size.width + 5, fps_size.height + baseLine + 5), cv::Scalar(0, 0, 0), -1);
+        cv::putText(image, fps_text, cv::Point(2, fps_size.height + 2), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                    cv::Scalar(0, 255, 0), thickness);
+
+        cv::imshow(output_name, image);
     }
 
     static void draw_keypoints(const cv::Mat& bgr, const std::vector<Object>& objects,
@@ -1844,14 +1866,29 @@ namespace detection
                                const std::vector<std::vector<uint8_t> >& skeleton,
                                const char* output_name)
     {
+        static int frame_count = 0;
+        static double last_time = (double)cv::getTickCount();
+        static double fps = 0.0;
+
+        frame_count++;
+        double current_time = (double)cv::getTickCount();
+        double elapsed = (current_time - last_time) / cv::getTickFrequency(); // 秒
+
+        if (elapsed >= 1.0)
+        {
+            fps = frame_count / elapsed;
+            frame_count = 0;
+            last_time = current_time;
+        }
+
         cv::Mat image = bgr.clone();
 
         for (size_t i = 0; i < objects.size(); i++)
         {
             const Object& obj = objects[i];
 
-            fprintf(stdout, "%2d: %3.0f%%, [%4.0f, %4.0f, %4.0f, %4.0f], person\n", obj.label, obj.prob * 100, obj.rect.x,
-                    obj.rect.y, obj.rect.x + obj.rect.width, obj.rect.y + obj.rect.height);
+            // fprintf(stdout, "%2d: %3.0f%%, [%4.0f, %4.0f, %4.0f, %4.0f], person\n", obj.label, obj.prob * 100, obj.rect.x,
+            //         obj.rect.y, obj.rect.x + obj.rect.width, obj.rect.y + obj.rect.height);
 
             cv::rectangle(image, obj.rect, cv::Scalar(255, 0, 0));
 
@@ -1907,11 +1944,36 @@ namespace detection
                 }
             }
         }
-        cv::imwrite(std::string(output_name) + ".jpg", image);
+
+        char fps_text[64];
+        sprintf(fps_text, "FPS: %.2f", fps);
+        int baseLine = 0;
+        cv::Size fps_size = cv::getTextSize(fps_text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
+        cv::rectangle(image, cv::Rect(0, 0, fps_size.width + 5, fps_size.height + baseLine + 5), cv::Scalar(0, 0, 0), -1);
+        cv::putText(image, fps_text, cv::Point(2, fps_size.height + 2), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                    cv::Scalar(0, 255, 0), 1);
+
+        cv::imshow(output_name, image);
+        // cv::imwrite(std::string(output_name) + ".jpg", image);
     }
 
     static void draw_objects_mask(const cv::Mat& bgr, const std::vector<Object>& objects, const char** class_names, const std::vector<std::vector<uint8_t> >& colors, const char* output_name)
     {
+        static int frame_count = 0;
+        static double last_time = (double)cv::getTickCount();
+        static double fps = 0.0;
+
+        frame_count++;
+        double current_time = (double)cv::getTickCount();
+        double elapsed = (current_time - last_time) / cv::getTickFrequency(); // 秒
+
+        if (elapsed >= 1.0)
+        {
+            fps = frame_count / elapsed;
+            frame_count = 0;
+            last_time = current_time;
+        }
+
         cv::Mat image = bgr.clone();
         cv::Mat mask = bgr.clone();
         int color_index = 0;
@@ -1922,8 +1984,8 @@ namespace detection
             const auto& color = colors[color_index % 80];
             color_index++;
 
-            fprintf(stdout, "%2d: %3.0f%%, [%4.0f, %4.0f, %4.0f, %4.0f], %s\n", obj.label, obj.prob * 100, obj.rect.x,
-                    obj.rect.y, obj.rect.x + obj.rect.width, obj.rect.y + obj.rect.height, class_names[obj.label]);
+            // fprintf(stdout, "%2d: %3.0f%%, [%4.0f, %4.0f, %4.0f, %4.0f], %s\n", obj.label, obj.prob * 100, obj.rect.x,
+            //         obj.rect.y, obj.rect.x + obj.rect.width, obj.rect.y + obj.rect.height, class_names[obj.label]);
 
             mask(cv::Rect((int)obj.rect.x, (int)obj.rect.y, (int)objects[i].rect.width, (int)objects[i].rect.height)).setTo(color, objects[i].mask);
 
@@ -1951,7 +2013,16 @@ namespace detection
         float blended_alpha = 0.5;
         image = (1 - blended_alpha) * mask + blended_alpha * image;
 
-        cv::imwrite(std::string(output_name) + ".jpg", image);
+        char fps_text[64];
+        sprintf(fps_text, "FPS: %.2f", fps);
+        int baseLine = 0;
+        cv::Size fps_size = cv::getTextSize(fps_text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
+        cv::rectangle(image, cv::Rect(0, 0, fps_size.width + 5, fps_size.height + baseLine + 5), cv::Scalar(0, 0, 0), -1);
+        cv::putText(image, fps_text, cv::Point(2, fps_size.height + 2), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                    cv::Scalar(0, 255, 0), 1);
+
+        cv::imshow(output_name, image);
+        // cv::imwrite(std::string(output_name) + ".jpg", image);
     }
 
     static void draw_objects_palm(const cv::Mat& bgr, const std::vector<PalmObject>& objects, const char* output_name)
@@ -2350,7 +2421,7 @@ namespace detection
             objects[i].rect.width = x1 - x0;
             objects[i].rect.height = y1 - y0;
 
-            for (int j = 0; j < objects[i].kps_feat.size() / 3; j++)
+            for (size_t j = 0; j < objects[i].kps_feat.size() / 3; j++)
             {
                 objects[i].kps_feat[j * 3] = std::max(
                     std::min((objects[i].kps_feat[j * 3] - tmp_w) * ratio_x, (float)(src_cols - 1)), 0.f);
@@ -2827,7 +2898,7 @@ namespace detection
             const std::vector<Object>& objects, 
             std::vector<cv::Point3f>& covar_maxtirx)
         {
-            int n = objects.size();
+            size_t n = objects.size();
             for (size_t i = 0; i < n; ++i) {
 
                 float a = objects[i].rect.width * objects[i].rect.width * 0.0833333333f;
@@ -2898,7 +2969,7 @@ namespace detection
             get_covariance_matrix(objects, covar_maxtrix);
             
             float nms_threshold_ = (1.f - nms_threshold) * (1.f - nms_threshold);
-            int n = objects.size();
+            size_t n = objects.size();
             
             for (size_t i = 0; i < n; ++i) {
                 float max_iou = 0.f;
