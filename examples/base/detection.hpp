@@ -1800,7 +1800,7 @@ namespace detection
         }
     }
 
-    static void draw_objects(const cv::Mat& bgr, const std::vector<Object>& objects, const char** class_names, const char* output_name, double fontScale = 0.5, int thickness = 1)
+    static cv::Mat draw_objects(const cv::Mat& bgr, const std::vector<Object>& objects, const char** class_names, const char* output_name, double fontScale = 0.5, int thickness = 1)
     {
         static const std::vector<cv::Scalar> COCO_COLORS = {
             {128, 56, 0, 255}, {128, 226, 255, 0}, {128, 0, 94, 255}, {128, 0, 37, 255}, {128, 0, 255, 94}, {128, 255, 226, 0}, {128, 0, 18, 255}, {128, 255, 151, 0}, {128, 170, 0, 255}, {128, 0, 255, 56}, {128, 255, 0, 75}, {128, 0, 75, 255}, {128, 0, 255, 169}, {128, 255, 0, 207}, {128, 75, 255, 0}, {128, 207, 0, 255}, {128, 37, 0, 255}, {128, 0, 207, 255}, {128, 94, 0, 255}, {128, 0, 255, 113}, {128, 255, 18, 0}, {128, 255, 0, 56}, {128, 18, 0, 255}, {128, 0, 255, 226}, {128, 170, 255, 0}, {128, 255, 0, 245}, {128, 151, 255, 0}, {128, 132, 255, 0}, {128, 75, 0, 255}, {128, 151, 0, 255}, {128, 0, 151, 255}, {128, 132, 0, 255}, {128, 0, 255, 245}, {128, 255, 132, 0}, {128, 226, 0, 255}, {128, 255, 37, 0}, {128, 207, 255, 0}, {128, 0, 255, 207}, {128, 94, 255, 0}, {128, 0, 226, 255}, {128, 56, 255, 0}, {128, 255, 94, 0}, {128, 255, 113, 0}, {128, 0, 132, 255}, {128, 255, 0, 132}, {128, 255, 170, 0}, {128, 255, 0, 188}, {128, 113, 255, 0}, {128, 245, 0, 255}, {128, 113, 0, 255}, {128, 255, 188, 0}, {128, 0, 113, 255}, {128, 255, 0, 0}, {128, 0, 56, 255}, {128, 255, 0, 113}, {128, 0, 255, 188}, {128, 255, 0, 94}, {128, 255, 0, 18}, {128, 18, 255, 0}, {128, 0, 255, 132}, {128, 0, 188, 255}, {128, 0, 245, 255}, {128, 0, 169, 255}, {128, 37, 255, 0}, {128, 255, 0, 151}, {128, 188, 0, 255}, {128, 0, 255, 37}, {128, 0, 255, 0}, {128, 255, 0, 170}, {128, 255, 0, 37}, {128, 255, 75, 0}, {128, 0, 0, 255}, {128, 255, 207, 0}, {128, 255, 0, 226}, {128, 255, 245, 0}, {128, 188, 255, 0}, {128, 0, 255, 18}, {128, 0, 255, 75}, {128, 0, 255, 151}, {128, 255, 56, 0}, {128, 245, 255, 0}};
@@ -1810,8 +1810,8 @@ namespace detection
         {
             const Object& obj = objects[i];
 
-            fprintf(stdout, "%2d: %3.0f%%, [%4.0f, %4.0f, %4.0f, %4.0f], %s\n", obj.label, obj.prob * 100, obj.rect.x,
-                    obj.rect.y, obj.rect.x + obj.rect.width, obj.rect.y + obj.rect.height, class_names[obj.label]);
+            // fprintf(stdout, "%2d: %3.0f%%, [%4.0f, %4.0f, %4.0f, %4.0f], %s\n", obj.label, obj.prob * 100, obj.rect.x,
+            //         obj.rect.y, obj.rect.x + obj.rect.width, obj.rect.y + obj.rect.height, class_names[obj.label]);
 
             cv::rectangle(image, obj.rect, COCO_COLORS[obj.label], thickness);
 
@@ -1835,14 +1835,12 @@ namespace detection
                         cv::Scalar(255, 255, 255), thickness);
         }
 
-        cv::imwrite(std::string(output_name) + ".jpg", image);
+        // cv::imwrite(std::string(output_name) + ".jpg", image);
+        return image;
     }
 
-    static void draw_keypoints(const cv::Mat& bgr, const std::vector<Object>& objects,
-                               const std::vector<std::vector<uint8_t> >& kps_colors,
-                               const std::vector<std::vector<uint8_t> >& limb_colors,
-                               const std::vector<std::vector<uint8_t> >& skeleton,
-                               const char* output_name)
+    static cv::Mat draw_keypoints(const cv::Mat& bgr, const std::vector<Object>& objects, const std::vector<std::vector<uint8_t> >& kps_colors, const std::vector<std::vector<uint8_t> >& limb_colors,
+                               const std::vector<std::vector<uint8_t> >& skeleton, const char* output_name, double fontScale = 0.5, int thickness = 1)
     {
         cv::Mat image = bgr.clone();
 
@@ -1850,8 +1848,8 @@ namespace detection
         {
             const Object& obj = objects[i];
 
-            fprintf(stdout, "%2d: %3.0f%%, [%4.0f, %4.0f, %4.0f, %4.0f], person\n", obj.label, obj.prob * 100, obj.rect.x,
-                    obj.rect.y, obj.rect.x + obj.rect.width, obj.rect.y + obj.rect.height);
+            // fprintf(stdout, "%2d: %3.0f%%, [%4.0f, %4.0f, %4.0f, %4.0f], person\n", obj.label, obj.prob * 100, obj.rect.x,
+            //         obj.rect.y, obj.rect.x + obj.rect.width, obj.rect.y + obj.rect.height);
 
             cv::rectangle(image, obj.rect, cv::Scalar(255, 0, 0));
 
@@ -1859,7 +1857,7 @@ namespace detection
             sprintf(text, "person %.1f%%", obj.prob * 100);
 
             int baseLine = 0;
-            cv::Size label_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
+            cv::Size label_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, fontScale, thickness, &baseLine);
 
             int x = obj.rect.x;
             int y = obj.rect.y - label_size.height - baseLine;
@@ -1871,7 +1869,7 @@ namespace detection
             cv::rectangle(image, cv::Rect(cv::Point(x, y), cv::Size(label_size.width, label_size.height + baseLine)),
                           cv::Scalar(255, 255, 255), -1);
 
-            cv::putText(image, text, cv::Point(x, y + label_size.height), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+            cv::putText(image, text, cv::Point(x, y + label_size.height), cv::FONT_HERSHEY_SIMPLEX, fontScale,
                         cv::Scalar(0, 0, 0));
 
             const int num_point = obj.kps_feat.size() / 3;
@@ -1907,7 +1905,9 @@ namespace detection
                 }
             }
         }
-        cv::imwrite(std::string(output_name) + ".jpg", image);
+        // cv::imshow(output_name, image);
+        // cv::imwrite(std::string(output_name) + ".jpg", image);
+        return image;
     }
 
     static void draw_objects_mask(const cv::Mat& bgr, const std::vector<Object>& objects, const char** class_names, const std::vector<std::vector<uint8_t> >& colors, const char* output_name)
@@ -1954,7 +1954,7 @@ namespace detection
         cv::imwrite(std::string(output_name) + ".jpg", image);
     }
 
-    static void draw_objects_palm(const cv::Mat& bgr, const std::vector<PalmObject>& objects, const char* output_name)
+    static cv::Mat draw_objects_palm(const cv::Mat& bgr, const std::vector<PalmObject>& objects, const char* output_name)
     {
         cv::Mat image = bgr.clone();
         for (size_t i = 0; i < objects.size(); i++)
@@ -1967,13 +1967,15 @@ namespace detection
             cv::line(image, obj.vertices[1], obj.vertices[2], cv::Scalar(0, 0, 255), 2, 8, 0);
             cv::line(image, obj.vertices[2], obj.vertices[3], cv::Scalar(0, 0, 255), 2, 8, 0);
             cv::line(image, obj.vertices[3], obj.vertices[0], cv::Scalar(0, 0, 255), 2, 8, 0);
-            for (auto ld : obj.landmarks)
-            {
-                cv::circle(image, ld, 2, cv::Scalar(0, 255, 0), -1, 8);
-            }
+            // for (auto ld : obj.landmarks)
+            // {
+            //     cv::circle(image, ld, 2, cv::Scalar(0, 255, 0), -1, 8);
+            // }
         }
-        cv::imwrite(std::string(output_name) + ".jpg", image);
+        // cv::imshow(std::string(output_name) + ".jpg", image);
+        return image;
     }
+
 
     static void draw_objects_yolopv2(const cv::Mat& bgr, const std::vector<Object>& objects, const cv::Mat& da_seg_mask, const cv::Mat& ll_seg_mask, const char* output_name)
     {
