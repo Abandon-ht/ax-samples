@@ -1,0 +1,3 @@
+cmake -DCMAKE_TOOLCHAIN_FILE=../toolchains/aarch64-none-linux-gnu.toolchain.cmake -DBSP_MSP_DIR=/home/m5stack/Workspace/StackFlow/SDK/github_source/m5stack_ax650n_msp/out/ -DAXERA_TARGET_CHIP=ax650n ..
+
+cmake -DBSP_MSP_DIR=/soc/ -DCMAKE_BUILD_TYPE=Release -DAXERA_TARGET_CHIP=ax650n ..

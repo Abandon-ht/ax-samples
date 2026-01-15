@@ -24,6 +24,11 @@ function(axera_example example_name)
 
     target_include_directories(${example_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${BSP_MSP_DIR}/include)
 
+    target_include_directories(${example_name} PRIVATE ${CMAKE_SOURCE_DIR}/third_party/libhv/include)
+    target_link_directories(${example_name} PRIVATE ${CMAKE_SOURCE_DIR}/third_party/libhv/lib)
+
+    target_link_libraries(${example_name} PRIVATE hv)
+
     # opencv
     target_include_directories(${example_name} PRIVATE ${OpenCV_INCLUDE_DIRS})
     target_link_libraries(${example_name} PRIVATE ${OpenCV_LIBS})
@@ -32,7 +37,7 @@ function(axera_example example_name)
     target_link_libraries(${example_name} PRIVATE ax_engine)
 
     # sdk
-    target_link_libraries(${example_name} PRIVATE ${CMAKE_THREAD_LIBS_INIT} ax_interpreter ax_sys ax_ivps)
+    target_link_libraries(${example_name} PRIVATE ${CMAKE_THREAD_LIBS_INIT} ax_interpreter ax_sys ax_ivps ax_venc)
     target_link_directories(${example_name} PRIVATE ${BSP_MSP_DIR}/lib)
 
     target_compile_options (${example_name} PUBLIC $<$<COMPILE_LANGUAGE:C,CXX>: -O3>)
