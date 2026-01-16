@@ -63,6 +63,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O1 -Wall -s -fPIC -Wunu
 
 # src files
 add_subdirectory(examples)
-# add_subdirectory(third_party/libhv)
+add_subdirectory(third_party/libhv)
 # report summary
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/summary.cmake")
