@@ -354,17 +354,18 @@ namespace task_face
     {
         std::vector<Object> proposals, objects;
 
+        float* output_ptr[3] = {(float*)ctx.io_data.pOutputs[0].pVirAddr,      // 1*80*80*4
+                                (float*)ctx.io_data.pOutputs[2].pVirAddr,      // 1*40*40*4
+                                (float*)ctx.io_data.pOutputs[4].pVirAddr};     // 1*20*20*4
+        float* output_cls_ptr[3] = {(float*)ctx.io_data.pOutputs[1].pVirAddr,  // 1*80*80*80
+                                    (float*)ctx.io_data.pOutputs[3].pVirAddr,  // 1*40*40*80
+                                    (float*)ctx.io_data.pOutputs[5].pVirAddr}; // 1*20*20*80
         for (int i = 0; i < 3; ++i)
         {
-            float* feat_ptr = (float*)ctx.io_data.pOutputs[i].pVirAddr;
-            int stride = (1 << i) * 8;
-            generate_proposals_yolov8_native(stride,
-                                             feat_ptr,
-                                             PROB_THRESHOLD,
-                                             proposals,
-                                             iw,
-                                             ih,
-                                             NUM_CLASS);
+            auto feat_ptr = output_ptr[i];
+            auto feat_cls_ptr = output_cls_ptr[i];
+            int32_t stride = (1 << i) * 8;
+            detection::generate_proposals_yolo26(stride, feat_ptr, feat_cls_ptr, PROB_THRESHOLD, proposals, iw, ih, NUM_CLASS);
         }
 
         get_out_bbox(proposals, objects, NMS_THRESHOLD,
