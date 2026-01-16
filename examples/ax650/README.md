@@ -27,7 +27,12 @@ AX-Samples 将不断更新最流行的、实用的、有趣的示例代码。
   - [YOLO11-pose](#YOLO11-pose)
 - 人体分割
   - [PP-HumanSeg](#PP-HumanSeg)
-
+- 立体视觉
+  - [IGEV-plusplus](#IGEV-plusplus)
+- 语义分割
+  - [DeepLabv3+](#DeepLabv3)
+- 背景移除
+  - [RMBG](#RMBG-1.4)
 
 ### 运行示例
 
@@ -639,6 +644,45 @@ Repeat 1 times, avg time 56.67 ms, max_time 56.67 ms, min_time 56.67 ms
 ```
 <img src="../../docs/ax650/depth_anything_out.png">
 
+### IGEV-plusplus
+```
+(base) root@ax650:/home/axera/650# ./ax_igev_plusplus -m rt_sceneflow.axmodel -l im0.png -R im1.png -r 10
+--------------------------------------
+model file : rt_sceneflow.axmodel
+left image file : im0.png
+right image file : im1.png
+img_h, img_w : 384 512
+--------------------------------------
+Engine creating handle is done.
+Engine creating context is done.
+Engine get io info is done.
+
+input size: 2
+    name:     left [UINT8] [FEATUREMAP]
+        1 x 384 x 512 x 3
+
+    name:    right [UINT8] [FEATUREMAP]
+        1 x 384 x 512 x 3
+
+
+output size: 1
+    name: pred_disp [FLOAT32]
+        1 x 1 x 384 x 512
+
+Engine alloc io is done.
+Engine push input is done.
+--------------------------------------
+post process cost time:12.30 ms
+--------------------------------------
+Repeat 10 times, avg time 202.86 ms, max_time 204.20 ms, min_time 202.04 ms
+Disparity range: [7.82, 46.75]
+--------------------------------------
+Saved disparity map: igev_plusplus_disparity.jpg
+Saved combined result: igev_plusplus_result.jpg
+--------------------------------------
+```
+<img src="../../docs/ax650/igev_plusplus_result.jpg">
+
 ### YOLOV8-OBB
 ```
 /opt/test # ./ax_yolov8_obb -m ./yolov8s-obb.axmodel -i ./dota_demo.jpg -r 10
@@ -903,3 +947,56 @@ detection num: 2
 --------------------------------------
 ```
 ![](../../docs/ax650/yolo_world_open_out.jpg)
+
+#### DeepLabv3+
+```
+root@ax650:~# ./ax_deep_lab_v3_plus -i 1_image.png -m deeplabv3plus_mobilenet_u16.axmodel
+--------------------------------------
+model file : deeplabv3plus_mobilenet_u16.axmodel
+image file : 1_image.png
+img_h, img_w : 513 513
+--------------------------------------
+Engine creating handle is done.
+Engine creating context is done.
+Engine get io info is done.
+Engine alloc io is done.
+Engine push input is done.
+--------------------------------------
+post process cost time:107.25 ms
+--------------------------------------
+Repeat 1 times, avg time 12.53 ms, max_time 12.53 ms, min_time 12.53 ms
+--------------------------------------
+```
+![](../../docs/ax650/deep_lab_v3_plus_out.png)
+
+### RMBG-1.4
+```
+(base) root@ax650:/home/ax650/RMBG-1.4# ./ax_rmbg -m ./axmodel/rmbg1_4_ax650.axmodel -i ./img/3_1920x1080.jpg
+--------------------------------------
+Model file: ./axmodel/rmbg1_4_ax650.axmodel
+Input image: ./img/3_1920x1080.jpg
+Output image: result.png
+Model input size: 1024 x 1024
+Repeat count: 1
+--------------------------------------
+Original image size: 1920 x 1080, channels: 3
+Engine creating handle is done.
+Engine creating context is done.
+Engine get io info is done. 
+Inputs:
+  [0] name: input, shape: [1, 3, 1024, 1024]
+Outputs:
+  [0] name: output, shape: [1, 1, 1024, 1024]
+Engine alloc io is done. 
+Engine push input is done. 
+--------------------------------------
+Postprocess time: 23.82 ms
+post process cost time:23.89 ms 
+--------------------------------------
+Repeat 1 times, avg time 106.16 ms, max_time 106.16 ms, min_time 106.16 ms
+--------------------------------------
+Saved result image: result.png
+Saved mask: mask.png
+--------------------------------------
+```
+![](../../docs/ax650/rmbg_out.jpeg)
