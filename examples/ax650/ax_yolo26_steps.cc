@@ -55,7 +55,6 @@ int NUM_CLASS = 80;
 const int DEFAULT_LOOP_COUNT = 1;
 
 const float PROB_THRESHOLD = 0.45f;
-const float NMS_THRESHOLD = 0.45f;
 namespace ax
 {
     void post_process(AX_ENGINE_IO_INFO_T* io_info, AX_ENGINE_IO_T* io_data, const cv::Mat& mat, int input_w, int input_h, const std::vector<float>& time_costs)
@@ -64,21 +63,25 @@ namespace ax
         std::vector<detection::Object> objects;
         timer timer_postprocess;
 
-        float* output_ptr[3] = {(float*)io_data->pOutputs[0].pVirAddr,      // 1*80*80*4
-                                (float*)io_data->pOutputs[2].pVirAddr,      // 1*40*40*4
-                                (float*)io_data->pOutputs[4].pVirAddr};     // 1*20*20*4
-        float* output_cls_ptr[3] = {(float*)io_data->pOutputs[1].pVirAddr,  // 1*80*80*80
-                                    (float*)io_data->pOutputs[3].pVirAddr,  // 1*40*40*80
-                                    (float*)io_data->pOutputs[5].pVirAddr}; // 1*20*20*80
+        float* output_box_ptr[3] = {(float*)io_data->pOutputs[0].pVirAddr,        // 1*80*80*4
+                                    (float*)io_data->pOutputs[3].pVirAddr,        // 1*40*40*4
+                                    (float*)io_data->pOutputs[6].pVirAddr};       // 1*20*20*4
+        float* output_score_ptr[3] = {(float*)io_data->pOutputs[1].pVirAddr,      // 1*80*80*1
+                                      (float*)io_data->pOutputs[4].pVirAddr,      // 1*40*40*1
+                                      (float*)io_data->pOutputs[7].pVirAddr};     // 1*20*20*1
+        int32_t* output_class_ptr[3] = {(int32_t*)io_data->pOutputs[2].pVirAddr,  // 1*80*80*1
+                                        (int32_t*)io_data->pOutputs[5].pVirAddr,  // 1*40*40*1
+                                        (int32_t*)io_data->pOutputs[8].pVirAddr}; // 1*20*20*1
         for (int i = 0; i < 3; ++i)
         {
-            auto feat_ptr = output_ptr[i];
-            auto feat_cls_ptr = output_cls_ptr[i];
+            auto feat_box_ptr = output_box_ptr[i];
+            auto feat_score_ptr = output_score_ptr[i];
+            auto feat_class_ptr = output_class_ptr[i];
             int32_t stride = (1 << i) * 8;
-            detection::generate_proposals_yolo26(stride, feat_ptr, feat_cls_ptr, PROB_THRESHOLD, proposals, input_w, input_h, NUM_CLASS);
+            detection::generate_proposals_yolo26(stride, feat_box_ptr, feat_score_ptr, feat_class_ptr, PROB_THRESHOLD, proposals, input_w, input_h, NUM_CLASS);
         }
 
-        detection::get_out_bbox(proposals, objects, NMS_THRESHOLD, input_h, input_w, mat.rows, mat.cols);
+        detection::get_out_bbox(proposals, objects, input_h, input_w, mat.rows, mat.cols);
         fprintf(stdout, "post process cost time:%.2f ms \n", timer_postprocess.cost());
         fprintf(stdout, "--------------------------------------\n");
         auto total_time = std::accumulate(time_costs.begin(), time_costs.end(), 0.f);

@@ -2204,6 +2204,60 @@ namespace detection
         }
     }
 
+    void get_out_bbox(const std::vector<Object>& proposals, std::vector<Object>& objects, int letterbox_rows, int letterbox_cols, int src_rows, int src_cols)
+    {
+        float scale_letterbox;
+        if ((letterbox_rows * 1.0f / src_rows) < (letterbox_cols * 1.0f / src_cols))
+            scale_letterbox = letterbox_rows * 1.0f / src_rows;
+        else
+            scale_letterbox = letterbox_cols * 1.0f / src_cols;
+
+        int resize_cols = int(scale_letterbox * src_cols);
+        int resize_rows = int(scale_letterbox * src_rows);
+
+        int tmp_h = (letterbox_rows - resize_rows) / 2;
+        int tmp_w = (letterbox_cols - resize_cols) / 2;
+
+        float ratio_x = (float)src_rows / resize_rows;
+        float ratio_y = (float)src_cols / resize_cols;
+
+        int count = (int)proposals.size();
+        objects.resize(count);
+
+        for (int i = 0; i < count; i++)
+        {
+            objects[i] = proposals[i];
+
+            float x0 = objects[i].rect.x;
+            float y0 = objects[i].rect.y;
+            float x1 = objects[i].rect.x + objects[i].rect.width;
+            float y1 = objects[i].rect.y + objects[i].rect.height;
+
+            x0 = (x0 - tmp_w) * ratio_x;
+            y0 = (y0 - tmp_h) * ratio_y;
+            x1 = (x1 - tmp_w) * ratio_x;
+            y1 = (y1 - tmp_h) * ratio_y;
+
+            for (int l = 0; l < 5; l++)
+            {
+                float lx = objects[i].landmark[l].x;
+                float ly = objects[i].landmark[l].y;
+                objects[i].landmark[l] = cv::Point2f((lx - tmp_w) * ratio_x,
+                                                     (ly - tmp_h) * ratio_y);
+            }
+
+            x0 = std::max(std::min(x0, (float)(src_cols - 1)), 0.f);
+            y0 = std::max(std::min(y0, (float)(src_rows - 1)), 0.f);
+            x1 = std::max(std::min(x1, (float)(src_cols - 1)), 0.f);
+            y1 = std::max(std::min(y1, (float)(src_rows - 1)), 0.f);
+
+            objects[i].rect.x = x0;
+            objects[i].rect.y = y0;
+            objects[i].rect.width = x1 - x0;
+            objects[i].rect.height = y1 - y0;
+        }
+    }
+
     void get_out_bbox_mask(std::vector<Object>& proposals, std::vector<Object>& objects, const float* mask_proto, int mask_proto_dim, int mask_stride, const float nms_threshold, int letterbox_rows, int letterbox_cols, int src_rows, int src_cols)
     {
         qsort_descent_inplace(proposals);
@@ -3123,52 +3177,34 @@ namespace detection
         }
     }
 
-    static void generate_proposals_yolo26(int stride, const float* feat, const float* feat_cls, float prob_threshold, std::vector<Object>& objects,
+    static void generate_proposals_yolo26(int stride, const float* feat_box, const float* feat_score, const int32_t* feat_class, float prob_threshold, std::vector<Object>& objects,
                                           int letterbox_cols, int letterbox_rows, int cls_num = 80)
     {
         const int feat_w = letterbox_cols / stride;
         const int feat_h = letterbox_rows / stride;
 
-        const float p = std::min(std::max(prob_threshold, 1e-6f), 1.f - 1e-6f);
-        const float conf_raw = std::log(p / (1.f - p));
-
         for (int h = 0; h < feat_h; ++h)
         {
             for (int w = 0; w < feat_w; ++w)
             {
-                int best_c = 0;
-                float best_logit = -FLT_MAX;
-                const float* cls_ptr = feat_cls + (h * feat_w + w) * cls_num;
-                for (int c = 0; c < cls_num; ++c)
-                {
-                    float v = cls_ptr[c];
-                    if (v > best_logit)
-                    {
-                        best_logit = v;
-                        best_c = c;
-                    }
-                }
+                const int idx = h * feat_w + w;
 
-                if (best_logit < conf_raw)
-                {
-                    continue;
-                }
+                float score = feat_score[idx];
+                if (score < prob_threshold) continue;
 
-                const float score = sigmoid(best_logit);
+                int label = feat_class[idx];
+                if (label < 0 || label >= cls_num) continue;
 
-                const float* box_ptr = feat + (h * feat_w + w) * 4;
-                const float l = box_ptr[0];
-                const float t = box_ptr[1];
-                const float r = box_ptr[2];
-                const float b = box_ptr[3];
+                const float* box_ptr = feat_box + idx * 4;
+                float l = box_ptr[0], t = box_ptr[1], r = box_ptr[2], b = box_ptr[3];
 
-                const float cx = (w + 0.5f) * stride;
-                const float cy = (h + 0.5f) * stride;
+                float cx = (w + 0.5f) * stride;
+                float cy = (h + 0.5f) * stride;
 
-                float x0 = (cx - l * stride);
-                float y0 = (cy - t * stride);
-                float x1 = (cx + r * stride);
-                float y1 = (cy + b * stride);
+                float x0 = cx - l * stride;
+                float y0 = cy - t * stride;
+                float x1 = cx + r * stride;
+                float y1 = cy + b * stride;
 
                 x0 = std::max(0.f, std::min(x0, (float)(letterbox_cols - 1)));
                 y0 = std::max(0.f, std::min(y0, (float)(letterbox_rows - 1)));
@@ -3180,7 +3216,7 @@ namespace detection
                 obj.rect.y = y0;
                 obj.rect.width = x1 - x0;
                 obj.rect.height = y1 - y0;
-                obj.label = best_c;
+                obj.label = label;
                 obj.prob = score;
                 objects.push_back(obj);
             }
